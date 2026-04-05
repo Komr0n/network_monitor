@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+
+{% block title %}Панель - Мониторинг сети{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="bi bi-speedometer2"></i> Панель мониторинга</h2>
+        <p class="text-muted">Текущее состояние сети, uptime по узлам и обзор групп в реальном времени</p>
+    </div>
+</div>
+
+{% if not user %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-3 mb-0">
+            <div>
+                <strong>Гостевой режим.</strong> Главная страница и история доступны без входа, а управление узлами и настройками остаётся под авторизацией.
+            </div>
+            <a href="/login" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-box-arrow-in-right"></i> Войти
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row mb-4 g-3">
+    <div class="col-md-3">
+        <div class="card card-status online h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-1">В сети</h6>
+                        <h2 class="mb-0 status-online" id="online-count">-</h2>
+                    </div>
+                    <div class="fs-1 status-online">
+                        <i class="bi bi-check-circle-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-status offline h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-1">Недоступно</h6>
+                        <h2 class="mb-0 status-offline" id="offline-count">-</h2>
+                    </div>
+                    <div class="fs-1 status-offline">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-1">Maintenance</h6>
+                        <h2 class="mb-0 text-warning" id="maintenance-count">-</h2>
+                    </div>
+                    <div class="fs-1 text-warning">
+                        <i class="bi bi-tools"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-1">Всего</h6>
+                        <h2 class="mb-0" id="total-count">-</h2>
+                    </div>
+                    <div class="fs-1 text-primary">
+                        <i class="bi bi-hdd-network"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4" id="offline-alert-section" style="display: none;">
+    <div class="col-12">
+        <div class="alert alert-danger">
+            <h5><i class="bi bi-exclamation-triangle-fill"></i> Недоступные узлы</h5>
+            <div id="offline-providers-list"></div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                <div class="d-flex gap-2 flex-wrap">
+                    {% if user %}
+                    <a href="/providers" class="btn btn-primary">
+                        <i class="bi bi-hdd-network"></i> Управление узлами
+                    </a>
+                    <a href="/config" class="btn btn-outline-dark">
+                        <i class="bi bi-gear"></i> Конфигурация
+                    </a>
+                    {% else %}
+                    <a href="/login" class="btn btn-outline-primary">
+                        <i class="bi bi-box-arrow-in-right"></i> Войти для управления
+                    </a>
+                    {% endif %}
+                    <a href="/history" class="btn btn-outline-secondary">
+                        <i class="bi bi-clock-history"></i> История
+                    </a>
+                    <button class="btn btn-outline-success" onclick="refreshStatus()">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить
+                    </button>
+                </div>
+                <div class="d-flex gap-3 align-items-center flex-wrap">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="problem-only-toggle">
+                        <label class="form-check-label" for="problem-only-toggle">Только проблемные узлы</label>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted small" id="refresh-interval-label">Автообновление каждые 30 секунд</span>
+                        <label class="text-muted small mb-0" for="refresh-interval-select">Интервал</label>
+                        <select class="form-select form-select-sm w-auto" id="refresh-interval-select">
+                            <option value="5">5 сек</option>
+                            <option value="10">10 сек</option>
+                            <option value="30" selected>30 сек</option>
+                            <option value="60">1 минута</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-collection"></i> Карточки групп</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3" id="group-cards"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Uptime по узлам</h5>
+                <span class="text-muted small">24 часа и 7 дней по журналу проверок</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3" id="uptime-cards"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Текущий статус</h5>
+                <span class="text-muted small" id="table-status-hint">Показываются все узлы</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="status-table">
+                        <thead>
+                            <tr>
+                                <th>Статус</th>
+                                <th>Название</th>
+                                <th>Группа</th>
+                                <th>Проверка</th>
+                                <th>Uptime 24ч</th>
+                                <th>Uptime 7д</th>
+                                <th>Отклик</th>
+                                <th>Последняя проверка</th>
+                            </tr>
+                        </thead>
+                        <tbody id="status-table-body">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    <i class="bi bi-arrow-repeat spin"></i> Загрузка...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    .group-card {
+        border-top: 4px solid var(--group-color, #0d6efd);
+        background:
+            linear-gradient(
+                135deg,
+                color-mix(in srgb, var(--group-color, #0d6efd) 14%, var(--app-panel-bg)) 0%,
+                var(--app-panel-bg) 52%
+            );
+    }
+
+    .group-card .group-title {
+        font-weight: 700;
+        color: var(--group-color, #0d6efd);
+    }
+
+    .uptime-card {
+        border: 1px solid var(--app-subtle-border);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: linear-gradient(180deg, var(--app-panel-bg) 0%, color-mix(in srgb, var(--app-panel-bg) 92%, var(--bs-body-bg)) 100%);
+        height: 100%;
+    }
+
+    .uptime-card.is-problem {
+        border-color: color-mix(in srgb, var(--bs-danger) 35%, var(--app-subtle-border));
+        background: linear-gradient(180deg, var(--app-danger-surface) 0%, var(--app-panel-bg) 100%);
+    }
+
+    .uptime-card.is-maintenance {
+        border-color: color-mix(in srgb, var(--bs-warning) 45%, var(--app-subtle-border));
+        background: linear-gradient(180deg, var(--app-warning-surface) 0%, var(--app-panel-bg) 100%);
+    }
+
+    .uptime-label {
+        font-size: 0.75rem;
+        color: var(--app-subtle-text);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .uptime-value {
+        font-size: 1.3rem;
+        font-weight: 700;
+    }
+
+    .sparkline {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        gap: 2px;
+        align-items: end;
+        height: 58px;
+        margin-top: 0.5rem;
+    }
+
+    .sparkline-bar {
+        background: linear-gradient(180deg, #198754 0%, #157347 100%);
+        border-radius: 999px;
+        min-height: 8px;
+        opacity: 0.92;
+    }
+
+    .sparkline-bar.is-empty {
+        background: var(--app-subtle-border);
+        opacity: 0.55;
+    }
+
+    .sparkline-bar.is-bad {
+        background: linear-gradient(180deg, #dc3545 0%, #b02a37 100%);
+    }
+
+    .provider-subtext,
+    .status-meta {
+        display: block;
+        font-size: 0.82rem;
+        color: var(--app-subtle-text);
+        margin-top: 0.15rem;
+    }
+
+    .status-row.table-warning-subtle {
+        --bs-table-bg: var(--app-warning-row-bg);
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const DASHBOARD_REFRESH_STORAGE_KEY = 'dashboard_refresh_interval_seconds';
+const DASHBOARD_REFRESH_OPTIONS = ['5', '10', '30', '60'];
+const DASHBOARD_PROBLEM_FILTER_KEY = 'dashboard_problem_only';
+
+let refreshIntervalHandle;
+let latestProviders = [];
+let latestUptime = new Map();
+
+function getSavedRefreshSeconds() {
+    const storedValue = window.localStorage.getItem(DASHBOARD_REFRESH_STORAGE_KEY);
+    return DASHBOARD_REFRESH_OPTIONS.includes(storedValue) ? parseInt(storedValue, 10) : 30;
+}
+
+function getSavedProblemOnly() {
+    return window.localStorage.getItem(DASHBOARD_PROBLEM_FILTER_KEY) === '1';
+}
+
+function formatRefreshLabel(seconds) {
+    if (seconds === 60) {
+        return 'Автообновление каждую минуту';
+    }
+    return `Автообновление каждые ${seconds} секунд`;
+}
+
+function applyRefreshInterval(seconds) {
+    const normalizedSeconds = DASHBOARD_REFRESH_OPTIONS.includes(String(seconds))
+        ? parseInt(seconds, 10)
+        : 30;
+    const select = document.getElementById('refresh-interval-select');
+    const label = document.getElementById('refresh-interval-label');
+
+    select.value = String(normalizedSeconds);
+    label.textContent = formatRefreshLabel(normalizedSeconds);
+    window.localStorage.setItem(DASHBOARD_REFRESH_STORAGE_KEY, String(normalizedSeconds));
+
+    if (refreshIntervalHandle) {
+        clearInterval(refreshIntervalHandle);
+    }
+
+    refreshIntervalHandle = setInterval(refreshStatus, normalizedSeconds * 1000);
+}
+
+function formatCheckLabel(provider) {
+    const typeLabels = {
+        auto: 'AUTO',
+        ping: 'PING',
+        tcp: `TCP${provider.check_port ? ':' + provider.check_port : ''}`,
+        http: `HTTP${provider.check_port ? ':' + provider.check_port : ''}`,
+        dns: 'DNS'
+    };
+    return typeLabels[provider.check_type] || provider.check_type || 'AUTO';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function hashString(value) {
+    return Array.from(value).reduce((acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0);
+}
+
+function getGroupColor(groupName) {
+    const seed = Math.abs(hashString(groupName || 'Без группы'));
+    const hue = seed % 360;
+    return `hsl(${hue} 72% 46%)`;
+}
+
+function formatPercent(value) {
+    if (value === null || value === undefined) {
+        return '—';
+    }
+    return `${value.toFixed(1)}%`;
+}
+
+function truncateText(value, limit = 60) {
+    if (!value || value.length <= limit) {
+        return value || '';
+    }
+    return `${value.slice(0, limit - 3)}...`;
+}
+
+function formatMaintenanceLabel(provider) {
+    if (!provider.maintenance_active) {
+        return '';
+    }
+    return provider.maintenance_source === 'scheduled' ? 'maintenance: schedule' : 'maintenance: manual';
+}
+
+function isProblemProvider(provider) {
+    return provider.status === 'offline' || (provider.fail_count || 0) > 0;
+}
+
+function updateSummary(data) {
+    document.getElementById('online-count').textContent = data.online;
+    document.getElementById('offline-count').textContent = data.offline;
+    document.getElementById('total-count').textContent = data.total;
+
+    const maintenanceCount = latestProviders.filter((provider) => provider.maintenance_active).length;
+    document.getElementById('maintenance-count').textContent = maintenanceCount;
+
+    const alertSection = document.getElementById('offline-alert-section');
+    const offlineList = document.getElementById('offline-providers-list');
+    if (data.offline > 0 && data.offline_providers.length > 0) {
+        alertSection.style.display = 'block';
+        offlineList.innerHTML = data.offline_providers.map((provider) => `
+            <span class="badge bg-danger me-2 mb-2">
+                ${escapeHtml(provider.name)} (${escapeHtml(provider.ip_address)}) - сбоев подряд: ${provider.fail_count}
+            </span>
+            ${provider.maintenance_active ? `<span class="badge text-bg-warning me-2 mb-2">${provider.maintenance_source === 'scheduled' ? 'maintenance: schedule' : 'maintenance: manual'}</span>` : ''}
+        `).join('');
+    } else {
+        alertSection.style.display = 'none';
+        offlineList.innerHTML = '';
+    }
+}
+
+function renderGroupCards(providers) {
+    const container = document.getElementById('group-cards');
+    if (!providers.length) {
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="text-muted text-center py-4">Группы появятся после добавления узлов.</div>
+            </div>
+        `;
+        return;
+    }
+
+    const groups = new Map();
+    providers.forEach((provider) => {
+        const key = provider.group_name || 'Без группы';
+        if (!groups.has(key)) {
+            groups.set(key, { total: 0, online: 0, offline: 0, maintenance: 0 });
+        }
+        const bucket = groups.get(key);
+        bucket.total += 1;
+        if (provider.status === 'offline') {
+            bucket.offline += 1;
+        } else {
+            bucket.online += 1;
+        }
+        if (provider.maintenance_active) {
+            bucket.maintenance += 1;
+        }
+    });
+
+    container.innerHTML = Array.from(groups.entries())
+        .sort(([left], [right]) => left.localeCompare(right, 'ru'))
+        .map(([groupName, stats]) => `
+            <div class="col-lg-4 col-md-6">
+                <div class="card group-card h-100" style="--group-color: ${getGroupColor(groupName)};">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <div class="group-title">${escapeHtml(groupName)}</div>
+                                <div class="text-muted small">Всего узлов: ${stats.total}</div>
+                            </div>
+                            <span class="badge text-bg-light border">${stats.offline > 0 ? 'Нужен контроль' : 'Стабильно'}</span>
+                        </div>
+                        <div class="d-flex gap-3 flex-wrap">
+                            <div><strong>${stats.online}</strong><div class="text-muted small">в сети</div></div>
+                            <div><strong class="text-danger">${stats.offline}</strong><div class="text-muted small">недоступно</div></div>
+                            <div><strong class="text-warning">${stats.maintenance}</strong><div class="text-muted small">maintenance</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+}
+
+function renderSparkline(values) {
+    return values.map((value) => {
+        if (value === null || value === undefined) {
+            return '<div class="sparkline-bar is-empty" style="height: 10%;"></div>';
+        }
+        const normalizedHeight = Math.max(10, Math.round(value));
+        const toneClass = value < 50 ? 'is-bad' : '';
+        return `<div class="sparkline-bar ${toneClass}" style="height: ${normalizedHeight}%;"></div>`;
+    }).join('');
+}
+
+function renderUptimeCards(uptimePayload) {
+    const container = document.getElementById('uptime-cards');
+    const providers = uptimePayload.providers || [];
+    if (!providers.length) {
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="text-muted text-center py-4">Карточки uptime появятся после первых проверок.</div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = providers.map((provider) => {
+        const cardClasses = [
+            'uptime-card',
+            provider.status === 'offline' ? 'is-problem' : '',
+            provider.maintenance_active ? 'is-maintenance' : ''
+        ].join(' ');
+        return `
+            <div class="col-xxl-3 col-lg-4 col-md-6">
+                <div class="${cardClasses}">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <strong>${escapeHtml(provider.name)}</strong>
+                            <span class="provider-subtext">${escapeHtml(provider.ip_address)}</span>
+                            <span class="provider-subtext">${provider.group_name ? escapeHtml(provider.group_name) : 'Без группы'}</span>
+                        </div>
+                        ${provider.maintenance_active ? `<span class="badge text-bg-warning">${provider.maintenance_source === 'scheduled' ? 'schedule' : 'manual'}</span>` : ''}
+                    </div>
+                    <div class="row mt-3 g-3">
+                        <div class="col-6">
+                            <div class="uptime-label">24 часа</div>
+                            <div class="uptime-value">${formatPercent(provider.uptime_24h)}</div>
+                            <div class="sparkline">${renderSparkline(provider.timeline_24h || [])}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="uptime-label">7 дней</div>
+                            <div class="uptime-value">${formatPercent(provider.uptime_7d)}</div>
+                            <div class="sparkline">${renderSparkline(provider.timeline_7d || [])}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderStatusTable(providers) {
+    const tbody = document.getElementById('status-table-body');
+    const problemOnly = document.getElementById('problem-only-toggle').checked;
+    const filteredProviders = providers
+        .filter((provider) => !problemOnly || isProblemProvider(provider))
+        .sort((left, right) => {
+            if (left.status !== right.status) {
+                return left.status === 'offline' ? -1 : 1;
+            }
+            return left.name.localeCompare(right.name, 'ru');
+        });
+
+    document.getElementById('table-status-hint').textContent = problemOnly
+        ? 'Показываются только проблемные узлы'
+        : 'Показываются все узлы';
+
+    if (!filteredProviders.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                    ${problemOnly ? 'Сейчас проблемных узлов нет.' : 'Узлы ещё не добавлены'}
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = filteredProviders.map((provider) => {
+        const uptimeEntry = latestUptime.get(provider.id) || {};
+        return `
+            <tr class="status-row ${provider.maintenance_active ? 'table-warning-subtle' : ''} ${provider.status === 'offline' ? 'table-danger' : ''}">
+                <td>
+                    <span class="status-indicator ${provider.status}"></span>
+                    <span class="status-${provider.status}">
+                        ${provider.status === 'offline' ? 'НЕДОСТУПЕН' : 'В СЕТИ'}
+                    </span>
+                    ${provider.maintenance_active ? `<span class="status-meta text-warning">${formatMaintenanceLabel(provider)}</span>` : ''}
+                </td>
+                <td>
+                    <strong>${escapeHtml(provider.name)}</strong>
+                    <span class="provider-subtext">${escapeHtml(provider.ip_address)}</span>
+                    ${provider.last_error ? `<span class="provider-subtext text-danger">${escapeHtml(truncateText(provider.last_error, 52))}</span>` : ''}
+                </td>
+                <td>${provider.group_name ? `<span class="badge bg-secondary">${escapeHtml(provider.group_name)}</span>` : '-'}</td>
+                <td>
+                    <strong>${escapeHtml(formatCheckLabel(provider))}</strong>
+                    ${provider.last_check_method ? `<span class="status-meta">${escapeHtml(provider.last_check_method)}</span>` : ''}
+                </td>
+                <td>${formatPercent(uptimeEntry.uptime_24h)}</td>
+                <td>${formatPercent(uptimeEntry.uptime_7d)}</td>
+                <td class="response-time">${provider.response_time ? `${provider.response_time} ms` : '-'}</td>
+                <td class="last-checked">${provider.last_checked ? formatRuDate(provider.last_checked) : 'Никогда'}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function refreshStatus() {
+    try {
+        const response = await fetch('/api/status/overview');
+        if (!response.ok) throw new Error('Не удалось получить сводку дашборда');
+
+        const overview = await response.json();
+        const statusData = overview.current || { providers: [] };
+        const summaryData = overview.summary || { total: 0, online: 0, offline: 0, offline_providers: [] };
+        const uptimeData = overview.uptime || { providers: [] };
+
+        latestProviders = statusData.providers || [];
+        latestUptime = new Map((uptimeData.providers || []).map((provider) => [provider.id, provider]));
+
+        updateSummary(summaryData);
+        renderGroupCards(latestProviders);
+        renderUptimeCards(uptimeData);
+        renderStatusTable(latestProviders);
+    } catch (error) {
+        console.error('Ошибка обновления дашборда:', error);
+        document.getElementById('status-table-body').innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle"></i> Ошибка загрузки данных
+                </td>
+            </tr>
+        `;
+        document.getElementById('group-cards').innerHTML = '';
+        document.getElementById('uptime-cards').innerHTML = '';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('problem-only-toggle').checked = getSavedProblemOnly();
+    document.getElementById('problem-only-toggle').addEventListener('change', (event) => {
+        window.localStorage.setItem(DASHBOARD_PROBLEM_FILTER_KEY, event.target.checked ? '1' : '0');
+        renderStatusTable(latestProviders);
+    });
+
+    document.getElementById('refresh-interval-select').addEventListener('change', (event) => {
+        applyRefreshInterval(event.target.value);
+    });
+
+    refreshStatus();
+    applyRefreshInterval(getSavedRefreshSeconds());
+});
+
+window.addEventListener('beforeunload', () => {
+    if (refreshIntervalHandle) clearInterval(refreshIntervalHandle);
+});
+</script>
+{% endblock %}

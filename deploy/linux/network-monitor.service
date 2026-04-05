@@ -1,0 +1,24 @@
+[Unit]
+Description=Network Monitor FastAPI Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=network-monitor
+Group=network-monitor
+WorkingDirectory=/opt/network_monitor
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/network_monitor/deploy/linux/run-network-monitor.sh
+Restart=always
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/network_monitor
+
+[Install]
+WantedBy=multi-user.target

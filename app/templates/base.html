@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}Мониторинг сети{% endblock %}</title>
+    <script>
+        (() => {
+            const themeKey = 'network_monitor_theme';
+            let theme = 'light';
+            try {
+                const stored = window.localStorage.getItem(themeKey);
+                if (stored === 'light' || stored === 'dark') {
+                    theme = stored;
+                } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    theme = 'dark';
+                }
+            } catch (error) {
+                theme = 'light';
+            }
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --online-color: #198754;
+            --offline-color: #dc3545;
+            --app-body-bg: #eef3f8;
+            --app-panel-bg: #ffffff;
+            --app-subtle-border: #dbe3ec;
+            --app-subtle-text: #667085;
+            --app-warning-row-bg: #fff4cf;
+            --app-warning-surface: #fff7dc;
+            --app-danger-surface: #fff3f3;
+        }
+
+        html[data-bs-theme="dark"] {
+            --app-body-bg: #0f1724;
+            --app-panel-bg: #162133;
+            --app-subtle-border: #243348;
+            --app-subtle-text: #9db0c8;
+            --app-warning-row-bg: #40361d;
+            --app-warning-surface: #302816;
+            --app-danger-surface: #341b22;
+        }
+
+        .status-online {
+            color: var(--online-color);
+        }
+
+        .status-offline {
+            color: var(--offline-color);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-indicator.online {
+            background-color: var(--online-color);
+            box-shadow: 0 0 8px var(--online-color);
+        }
+
+        .status-indicator.offline {
+            background-color: var(--offline-color);
+            box-shadow: 0 0 8px var(--offline-color);
+        }
+
+        .card-status {
+            border-left: 4px solid;
+        }
+
+        .card-status.online {
+            border-left-color: var(--online-color);
+        }
+
+        .card-status.offline {
+            border-left-color: var(--offline-color);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+        }
+
+        .app-body {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at top left, color-mix(in srgb, var(--bs-primary) 14%, transparent), transparent 26%),
+                linear-gradient(180deg, color-mix(in srgb, var(--app-body-bg) 78%, #ffffff 22%) 0%, var(--app-body-bg) 100%);
+        }
+
+        .card,
+        .modal-content,
+        .dropdown-menu,
+        .list-group-item {
+            background-color: var(--app-panel-bg);
+            border-color: var(--app-subtle-border);
+        }
+
+        .text-muted,
+        .form-text,
+        .response-time,
+        .last-checked {
+            color: var(--app-subtle-text) !important;
+        }
+
+        .table-responsive {
+            min-height: 300px;
+        }
+
+        .response-time {
+            font-size: 0.85em;
+        }
+
+        .last-checked {
+            font-size: 0.8em;
+        }
+
+        #theme-toggle-label {
+            min-width: 5.5rem;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="app-body">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-activity"></i> Мониторинг сети
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/">
+                            <i class="bi bi-speedometer2"></i> Панель
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path == '/history' %}active{% endif %}" href="/history">
+                            <i class="bi bi-clock-history"></i> История
+                        </a>
+                    </li>
+                    {% if user %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path == '/providers' %}active{% endif %}" href="/providers">
+                            <i class="bi bi-hdd-network"></i> Узлы
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path == '/config' %}active{% endif %}" href="/config">
+                            <i class="bi bi-gear"></i> Конфигурация
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <button class="btn btn-sm btn-outline-light me-3" type="button" id="theme-toggle">
+                    <i class="bi bi-moon-stars-fill"></i>
+                    <span id="theme-toggle-label">Темная тема</span>
+                </button>
+                <ul class="navbar-nav">
+                    {% if user %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="POST" action="/auth/logout" class="px-3 py-1">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="dropdown-item px-0">
+                                        <i class="bi bi-box-arrow-right"></i> Выйти
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path == '/login' %}active{% endif %}" href="/login">
+                            <i class="bi bi-box-arrow-in-right"></i> Войти
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container-fluid py-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const THEME_STORAGE_KEY = 'network_monitor_theme';
+
+        function getCurrentTheme() {
+            return document.documentElement.getAttribute('data-bs-theme') || 'light';
+        }
+
+        function syncThemeToggle() {
+            const button = document.getElementById('theme-toggle');
+            const label = document.getElementById('theme-toggle-label');
+            if (!button || !label) {
+                return;
+            }
+
+            const theme = getCurrentTheme();
+            const icon = button.querySelector('i');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+            }
+            label.textContent = theme === 'dark' ? 'Светлая тема' : 'Темная тема';
+            button.setAttribute('aria-label', label.textContent);
+        }
+
+        function setTheme(theme) {
+            const normalized = theme === 'dark' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-bs-theme', normalized);
+            try {
+                window.localStorage.setItem(THEME_STORAGE_KEY, normalized);
+            } catch (error) {
+                console.warn('Failed to persist theme preference', error);
+            }
+            syncThemeToggle();
+        }
+
+        function getCsrfToken() {
+            return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        }
+
+        function fetchWithCsrf(url, options = {}) {
+            const headers = new Headers(options.headers || {});
+            if (!headers.has('X-CSRF-Token')) {
+                headers.set('X-CSRF-Token', getCsrfToken());
+            }
+            return fetch(url, { ...options, headers });
+        }
+
+        function formatRuDate(value) {
+            if (!value) return '-';
+            const normalized = /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`;
+            const parsed = new Date(normalized);
+            if (Number.isNaN(parsed.getTime())) return value;
+            return parsed.toLocaleString('ru-RU');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            syncThemeToggle();
+            document.getElementById('theme-toggle')?.addEventListener('click', () => {
+                setTheme(getCurrentTheme() === 'dark' ? 'light' : 'dark');
+            });
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

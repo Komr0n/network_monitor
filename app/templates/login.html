@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Вход - Мониторинг сети{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white text-center">
+                <h4 class="mb-0"><i class="bi bi-shield-lock"></i> Мониторинг сети</h4>
+            </div>
+            <div class="card-body p-4">
+                <h5 class="card-title text-center mb-4">Вход в систему</h5>
+
+                {% if error %}
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    {% if error == "invalid_credentials" %}
+                        Неверный логин или пароль
+                    {% else %}
+                        Ошибка авторизации
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <form method="POST" action="/auth/login/form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Логин</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="username" name="username" required autofocus>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="password" class="form-label">Пароль</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-key"></i></span>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-box-arrow-in-right"></i> Войти
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center text-muted">
+                <small>Система мониторинга сети</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

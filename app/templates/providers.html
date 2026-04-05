@@ -1,0 +1,801 @@
+{% extends "base.html" %}
+
+{% block title %}Узлы - Мониторинг сети{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="bi bi-hdd-network"></i> Узлы мониторинга</h2>
+        <p class="text-muted mb-0">Управляйте узлами, типами проверок и maintenance-окнами из одного экрана.</p>
+    </div>
+</div>
+
+<div class="row mb-4 g-3">
+    <div class="col-xl-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-5">
+                        <label for="search-input" class="form-label mb-1">Поиск</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" id="search-input" placeholder="Имя, IP или host">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="group-filter" class="form-label mb-1">Группа</label>
+                        <select class="form-select" id="group-filter">
+                            <option value="">Все группы</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="status-filter" class="form-label mb-1">Статус</label>
+                        <select class="form-select" id="status-filter">
+                            <option value="">Все</option>
+                            <option value="online">В сети</option>
+                            <option value="offline">Недоступен</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end gap-2">
+                        <button class="btn btn-primary flex-fill" type="button" id="apply-filters-btn">
+                            <i class="bi bi-funnel"></i> Применить
+                        </button>
+                        <button class="btn btn-outline-secondary" type="button" id="reset-filters-btn" title="Сбросить фильтры">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body d-flex flex-wrap gap-2 align-items-end justify-content-xl-end">
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#providerModal" onclick="resetForm()">
+                    <i class="bi bi-plus-lg"></i> Добавить узел
+                </button>
+                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importModal" onclick="resetImportForm()">
+                    <i class="bi bi-upload"></i> Импорт IP
+                </button>
+                <a href="/api/export/providers/csv" class="btn btn-outline-secondary">
+                    <i class="bi bi-download"></i> Экспорт
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle" id="providers-table">
+                <thead>
+                    <tr>
+                        <th>Статус</th>
+                        <th>Название</th>
+                        <th>IP / Host</th>
+                        <th>Группа</th>
+                        <th>Проверка</th>
+                        <th>Maintenance</th>
+                        <th>Сбои</th>
+                        <th>Последняя проверка</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="providers-table-body">
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            <i class="bi bi-arrow-repeat spin"></i> Загрузка...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <span class="text-muted" id="showing-text">Показано узлов: 0</span>
+            <span class="text-muted small">Клик по строке узла открывает историю, uptime и алерты этого провайдера.</span>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="providerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Добавить узел</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="providerForm">
+                    <input type="hidden" id="providerId">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Название *</label>
+                            <input type="text" class="form-control" id="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="ipAddress" class="form-label">IP-адрес или host *</label>
+                            <input type="text" class="form-control" id="ipAddress" required placeholder="192.168.1.1 или srv-01.local">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="groupName" class="form-label">Группа</label>
+                            <input type="text" class="form-control" id="groupName" placeholder="Например: офис, дата-центр">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="checkType" class="form-label">Тип проверки</label>
+                            <select class="form-select" id="checkType">
+                                <option value="auto">AUTO: ping + fallback</option>
+                                <option value="ping">PING</option>
+                                <option value="tcp">TCP порт</option>
+                                <option value="http">HTTP endpoint</option>
+                                <option value="dns">DNS resolve</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label for="description" class="form-label">Описание</label>
+                            <textarea class="form-control" id="description" rows="2"></textarea>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="row g-3">
+                        <div class="col-md-4 check-option check-option-tcp check-option-http">
+                            <label for="checkPort" class="form-label">TCP / HTTP порт</label>
+                            <input type="number" class="form-control" id="checkPort" min="1" max="65535" placeholder="80">
+                        </div>
+                        <div class="col-md-8 check-option check-option-http">
+                            <label for="checkPath" class="form-label">HTTP path или полный URL</label>
+                            <input type="text" class="form-control" id="checkPath" placeholder="/health или https://service.example.com/health">
+                            <div class="form-text">Если указан полный URL, host и порт из него будут использованы как есть.</div>
+                        </div>
+                        <div class="col-md-8 check-option check-option-dns">
+                            <label for="dnsExpectedValue" class="form-label">Ожидаемое DNS-значение</label>
+                            <input type="text" class="form-control" id="dnsExpectedValue" placeholder="Например: 192.168.0.10">
+                            <div class="form-text">Опционально. Если поле пустое, достаточно успешного разрешения имени.</div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="maintenanceMode">
+                        <label class="form-check-label" for="maintenanceMode">
+                            Maintenance mode: не отправлять Telegram-алерты по этому узлу
+                        </label>
+                    </div>
+                    <div class="mb-0">
+                        <label for="maintenanceNote" class="form-label">Комментарий maintenance</label>
+                        <input type="text" class="form-control" id="maintenanceNote" placeholder="Например: работы до 19:00">
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label for="maintenanceWindowStart" class="form-label">Начало maintenance-окна</label>
+                            <input type="datetime-local" class="form-control" id="maintenanceWindowStart">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="maintenanceWindowEnd" class="form-label">Конец maintenance-окна</label>
+                            <input type="datetime-local" class="form-control" id="maintenanceWindowEnd">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-text">Если указать время, Telegram-алерты по узлу будут отключаться автоматически в этом окне.</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveProvider()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Импорт IP-адресов</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    Поддерживаются форматы: один IP/хост в строке, либо CSV/TXT.
+                    Для расширенного импорта используйте заголовки
+                    <code>name,ip_address,group_name,description,check_type,check_port,check_path,dns_expected_value,maintenance_mode,maintenance_note,maintenance_window_start,maintenance_window_end</code>.
+                </div>
+                <div class="mb-3">
+                    <a class="btn btn-sm btn-outline-secondary" href="/static/provider-import-template.csv" download>
+                        <i class="bi bi-file-earmark-arrow-down"></i> Скачать CSV-шаблон
+                    </a>
+                </div>
+                <div class="mb-3">
+                    <label for="importDefaultGroup" class="form-label">Группа по умолчанию</label>
+                    <input type="text" class="form-control" id="importDefaultGroup" placeholder="Будет подставлена, если в строке группа не указана">
+                </div>
+                <div class="mb-3">
+                    <label for="importText" class="form-label">Вставить список</label>
+                    <textarea class="form-control" id="importText" rows="10" placeholder="192.168.1.10&#10;192.168.1.11&#10;Core Router,192.168.1.1,Network,Основной шлюз&#10;name,ip_address,group_name,description,check_type,check_port,check_path,dns_expected_value,maintenance_mode,maintenance_note,maintenance_window_start,maintenance_window_end"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="importFile" class="form-label">Или загрузить файл CSV/TXT</label>
+                    <input type="file" class="form-control" id="importFile" accept=".csv,.txt">
+                </div>
+                <div id="import-feedback" class="d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" onclick="importProviders()">
+                    <i class="bi bi-upload"></i> Импортировать
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Подтвердите удаление</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Удалить узел <strong id="deleteProviderName"></strong>?</p>
+                <p class="text-muted mb-0">Это действие нельзя отменить.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    .provider-row {
+        cursor: pointer;
+    }
+
+    .provider-row td:last-child,
+    .provider-row .btn {
+        cursor: default;
+    }
+
+    .provider-row.table-warning-subtle {
+        --bs-table-bg: var(--app-warning-row-bg);
+    }
+
+    .provider-name {
+        min-width: 220px;
+    }
+
+    .provider-name .provider-description {
+        display: block;
+        color: var(--app-subtle-text);
+        font-size: 0.85rem;
+        margin-top: 0.15rem;
+    }
+
+    .status-meta {
+        font-size: 0.8rem;
+        color: var(--app-subtle-text);
+        display: block;
+        margin-top: 0.15rem;
+    }
+
+    .check-option {
+        display: none;
+    }
+
+    .maintenance-pill {
+        font-size: 0.75rem;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let deleteProviderId = null;
+let providerModal;
+let importModal;
+let deleteModal;
+
+document.addEventListener('DOMContentLoaded', () => {
+    providerModal = new bootstrap.Modal(document.getElementById('providerModal'));
+    importModal = new bootstrap.Modal(document.getElementById('importModal'));
+    deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+    document.getElementById('search-input').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            loadProviders();
+        }
+    });
+    document.getElementById('apply-filters-btn').addEventListener('click', loadProviders);
+    document.getElementById('reset-filters-btn').addEventListener('click', resetFilters);
+    document.getElementById('providers-table-body').addEventListener('click', handleTableClick);
+    document.getElementById('checkType').addEventListener('change', applyCheckTypeState);
+
+    applyCheckTypeState();
+    loadGroups();
+    loadProviders();
+});
+
+async function loadProviders() {
+    const search = document.getElementById('search-input').value.trim();
+    const group = document.getElementById('group-filter').value;
+    const providerStatus = document.getElementById('status-filter').value;
+
+    try {
+        const params = new URLSearchParams({ limit: '1000' });
+        if (search) params.set('search', search);
+        if (group) params.set('group', group);
+        if (providerStatus) params.set('status', providerStatus);
+
+        const response = await fetch(`/api/providers?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error('Не удалось получить список узлов');
+        }
+
+        renderProviders(await response.json());
+    } catch (error) {
+        console.error('Ошибка загрузки узлов:', error);
+        document.getElementById('providers-table-body').innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle"></i> Ошибка загрузки узлов
+                </td>
+            </tr>
+        `;
+    }
+}
+
+async function loadGroups(selectedGroup = null) {
+    const currentValue = selectedGroup ?? document.getElementById('group-filter').value;
+    try {
+        const response = await fetch('/api/providers/groups/all');
+        if (!response.ok) {
+            throw new Error('Не удалось загрузить группы');
+        }
+
+        const data = await response.json();
+        const select = document.getElementById('group-filter');
+        select.innerHTML = '<option value="">Все группы</option>';
+
+        data.groups.forEach((group) => {
+            const option = document.createElement('option');
+            option.value = group;
+            option.textContent = group;
+            select.appendChild(option);
+        });
+
+        if (currentValue) {
+            select.value = currentValue;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки групп:', error);
+    }
+}
+
+function formatCheckLabel(provider) {
+    const typeLabels = {
+        auto: 'AUTO',
+        ping: 'PING',
+        tcp: `TCP${provider.check_port ? ':' + provider.check_port : ''}`,
+        http: `HTTP${provider.check_port ? ':' + provider.check_port : ''}`,
+        dns: 'DNS'
+    };
+    return typeLabels[provider.check_type] || provider.check_type || 'AUTO';
+}
+
+function isoToLocalInputValue(value) {
+    if (!value) {
+        return '';
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return '';
+    }
+    const shifted = new Date(parsed.getTime() - (parsed.getTimezoneOffset() * 60000));
+    return shifted.toISOString().slice(0, 16);
+}
+
+function localInputToIso(value) {
+    if (!value) {
+        return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
+    return parsed.toISOString();
+}
+
+function renderMaintenance(provider) {
+    const hasSchedule = Boolean(provider.maintenance_window_start || provider.maintenance_window_end);
+    if (!provider.maintenance_active && !provider.maintenance_mode && !hasSchedule) {
+        return '<span class="text-muted">Нет</span>';
+    }
+
+    let badgeLabel = 'Включен';
+    let badgeClass = 'text-bg-warning';
+    if (provider.maintenance_active && provider.maintenance_source === 'scheduled') {
+        badgeLabel = 'По расписанию';
+    } else if (!provider.maintenance_active && hasSchedule) {
+        badgeLabel = 'Запланировано';
+        badgeClass = 'text-bg-secondary';
+    }
+
+    const startedAt = provider.maintenance_active && provider.maintenance_started_at
+        ? `<span class="status-meta">с ${formatRuDate(provider.maintenance_started_at)}</span>`
+        : '';
+    const windowHint = hasSchedule
+        ? `<span class="status-meta">окно: ${provider.maintenance_window_start ? formatRuDate(provider.maintenance_window_start) : 'сейчас'} → ${provider.maintenance_window_end ? formatRuDate(provider.maintenance_window_end) : 'без конца'}</span>`
+        : '';
+    const note = provider.maintenance_note
+        ? `<span class="status-meta">${escapeHtml(trimText(provider.maintenance_note, 45))}</span>`
+        : '';
+
+    return `
+        <span class="badge ${badgeClass} maintenance-pill">${badgeLabel}</span>
+        ${startedAt}
+        ${windowHint}
+        ${note}
+    `;
+}
+
+function renderProviders(providers) {
+    const tbody = document.getElementById('providers-table-body');
+    if (!providers.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center text-muted py-4">Узлы не найдены</td>
+            </tr>
+        `;
+        document.getElementById('showing-text').textContent = 'Показано узлов: 0';
+        return;
+    }
+
+    tbody.innerHTML = providers.map((provider) => `
+        <tr class="provider-row ${provider.maintenance_active ? 'table-warning-subtle' : ''}" data-provider-id="${provider.id}">
+            <td>
+                <span class="status-indicator ${provider.current_status}"></span>
+                <span class="status-${provider.current_status}">
+                    ${provider.current_status === 'offline' ? 'Недоступен' : 'В сети'}
+                </span>
+                ${provider.last_check_method ? `<span class="status-meta">${escapeHtml(provider.last_check_method)}</span>` : ''}
+            </td>
+            <td class="provider-name">
+                <strong>${escapeHtml(provider.name)}</strong>
+                ${provider.description ? `<span class="provider-description">${escapeHtml(trimText(provider.description, 90))}</span>` : ''}
+            </td>
+            <td>
+                <code>${escapeHtml(provider.ip_address)}</code>
+                ${provider.last_error ? `<span class="status-meta text-danger">${escapeHtml(trimText(provider.last_error, 50))}</span>` : ''}
+            </td>
+            <td>${provider.group_name ? `<span class="badge bg-secondary">${escapeHtml(provider.group_name)}</span>` : '-'}</td>
+            <td>
+                <strong>${escapeHtml(formatCheckLabel(provider))}</strong>
+                ${provider.check_type === 'http' && provider.check_path ? `<span class="status-meta">${escapeHtml(trimText(provider.check_path, 45))}</span>` : ''}
+                ${provider.check_type === 'dns' && provider.dns_expected_value ? `<span class="status-meta">ожидаем ${escapeHtml(provider.dns_expected_value)}</span>` : ''}
+            </td>
+            <td>${renderMaintenance(provider)}</td>
+            <td>${provider.fail_count > 0 ? `<span class="badge bg-warning text-dark">${provider.fail_count}</span>` : '0'}</td>
+            <td>
+                ${provider.last_checked ? formatRuDate(provider.last_checked) : '-'}
+                ${provider.response_time ? `<span class="status-meta">${provider.response_time} ms</span>` : ''}
+            </td>
+            <td class="text-nowrap">
+                <button class="btn btn-sm btn-outline-secondary js-history-provider" data-id="${provider.id}" title="История">
+                    <i class="bi bi-clock-history"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-primary js-edit-provider"
+                    data-id="${provider.id}"
+                    data-name="${encodeDataValue(provider.name)}"
+                    data-ip="${encodeDataValue(provider.ip_address)}"
+                    data-group="${encodeDataValue(provider.group_name || '')}"
+                    data-description="${encodeDataValue(provider.description || '')}"
+                    data-check-type="${encodeDataValue(provider.check_type || 'auto')}"
+                    data-check-port="${provider.check_port || ''}"
+                    data-check-path="${encodeDataValue(provider.check_path || '')}"
+                    data-dns-expected="${encodeDataValue(provider.dns_expected_value || '')}"
+                    data-maintenance-mode="${provider.maintenance_mode ? '1' : '0'}"
+                    data-maintenance-note="${encodeDataValue(provider.maintenance_note || '')}"
+                    data-maintenance-window-start="${encodeDataValue(provider.maintenance_window_start || '')}"
+                    data-maintenance-window-end="${encodeDataValue(provider.maintenance_window_end || '')}"
+                    title="Редактировать">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger js-delete-provider"
+                    data-id="${provider.id}"
+                    data-name="${encodeDataValue(provider.name)}"
+                    title="Удалить">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+
+    document.getElementById('showing-text').textContent = `Показано узлов: ${providers.length}`;
+}
+
+function applyCheckTypeState() {
+    const checkType = document.getElementById('checkType').value;
+    document.querySelectorAll('.check-option').forEach((element) => {
+        element.style.display = 'none';
+    });
+
+    if (checkType === 'tcp') {
+        document.querySelectorAll('.check-option-tcp').forEach((element) => {
+            element.style.display = '';
+        });
+    }
+    if (checkType === 'http') {
+        document.querySelectorAll('.check-option-http').forEach((element) => {
+            element.style.display = '';
+        });
+    }
+    if (checkType === 'dns') {
+        document.querySelectorAll('.check-option-dns').forEach((element) => {
+            element.style.display = '';
+        });
+    }
+}
+
+function resetFilters() {
+    document.getElementById('search-input').value = '';
+    document.getElementById('group-filter').value = '';
+    document.getElementById('status-filter').value = '';
+    loadProviders();
+}
+
+function resetForm() {
+    document.getElementById('providerForm').reset();
+    document.getElementById('providerId').value = '';
+    document.getElementById('checkType').value = 'auto';
+    document.getElementById('maintenanceMode').checked = false;
+    document.getElementById('maintenanceWindowStart').value = '';
+    document.getElementById('maintenanceWindowEnd').value = '';
+    document.getElementById('modalTitle').textContent = 'Добавить узел';
+    applyCheckTypeState();
+}
+
+function resetImportForm() {
+    document.getElementById('importDefaultGroup').value = '';
+    document.getElementById('importText').value = '';
+    document.getElementById('importFile').value = '';
+    const feedback = document.getElementById('import-feedback');
+    feedback.className = 'd-none';
+    feedback.innerHTML = '';
+}
+
+function handleTableClick(event) {
+    const historyButton = event.target.closest('.js-history-provider');
+    if (historyButton) {
+        goToHistory(historyButton.dataset.id);
+        return;
+    }
+
+    const editButton = event.target.closest('.js-edit-provider');
+    if (editButton) {
+        editProvider(editButton.dataset);
+        return;
+    }
+
+    const deleteButton = event.target.closest('.js-delete-provider');
+    if (deleteButton) {
+        showDeleteModal(deleteButton.dataset.id, decodeDataValue(deleteButton.dataset.name));
+        return;
+    }
+
+    const row = event.target.closest('.provider-row');
+    if (row) {
+        goToHistory(row.dataset.providerId);
+    }
+}
+
+function goToHistory(providerId) {
+    const url = new URL('/history', window.location.origin);
+    url.searchParams.set('provider_id', providerId);
+    window.location.href = `${url.pathname}${url.search}`;
+}
+
+function editProvider(dataset) {
+    document.getElementById('providerId').value = dataset.id;
+    document.getElementById('name').value = decodeDataValue(dataset.name);
+    document.getElementById('ipAddress').value = decodeDataValue(dataset.ip);
+    document.getElementById('groupName').value = decodeDataValue(dataset.group);
+    document.getElementById('description').value = decodeDataValue(dataset.description);
+    document.getElementById('checkType').value = decodeDataValue(dataset.checkType || 'auto');
+    document.getElementById('checkPort').value = dataset.checkPort || '';
+    document.getElementById('checkPath').value = decodeDataValue(dataset.checkPath || '');
+    document.getElementById('dnsExpectedValue').value = decodeDataValue(dataset.dnsExpected || '');
+    document.getElementById('maintenanceMode').checked = dataset.maintenanceMode === '1';
+    document.getElementById('maintenanceNote').value = decodeDataValue(dataset.maintenanceNote || '');
+    document.getElementById('maintenanceWindowStart').value = isoToLocalInputValue(decodeDataValue(dataset.maintenanceWindowStart || ''));
+    document.getElementById('maintenanceWindowEnd').value = isoToLocalInputValue(decodeDataValue(dataset.maintenanceWindowEnd || ''));
+    document.getElementById('modalTitle').textContent = 'Редактировать узел';
+    applyCheckTypeState();
+    providerModal.show();
+}
+
+async function saveProvider() {
+    const id = document.getElementById('providerId').value;
+    const payload = {
+        name: document.getElementById('name').value.trim(),
+        ip_address: document.getElementById('ipAddress').value.trim(),
+        group_name: document.getElementById('groupName').value.trim() || null,
+        description: document.getElementById('description').value.trim() || null,
+        check_type: document.getElementById('checkType').value,
+        check_port: document.getElementById('checkPort').value ? Number(document.getElementById('checkPort').value) : null,
+        check_path: document.getElementById('checkPath').value.trim() || null,
+        dns_expected_value: document.getElementById('dnsExpectedValue').value.trim() || null,
+        maintenance_mode: document.getElementById('maintenanceMode').checked,
+        maintenance_note: document.getElementById('maintenanceNote').value.trim() || null,
+        maintenance_window_start: localInputToIso(document.getElementById('maintenanceWindowStart').value),
+        maintenance_window_end: localInputToIso(document.getElementById('maintenanceWindowEnd').value)
+    };
+
+    if (!payload.name || !payload.ip_address) {
+        alert('Название и IP/host обязательны');
+        return;
+    }
+
+    if (payload.maintenance_window_start && payload.maintenance_window_end) {
+        if (new Date(payload.maintenance_window_start) > new Date(payload.maintenance_window_end)) {
+            alert('Начало maintenance-окна не может быть позже конца');
+            return;
+        }
+    }
+
+    try {
+        const response = await fetchWithCsrf(id ? `/api/providers/${id}` : '/api/providers', {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(readApiError(error) || 'Не удалось сохранить узел');
+        }
+
+        providerModal.hide();
+        await loadGroups(payload.group_name);
+        await loadProviders();
+    } catch (error) {
+        alert(`Ошибка: ${error.message}`);
+    }
+}
+
+async function importProviders() {
+    const formData = new FormData();
+    const importText = document.getElementById('importText').value.trim();
+    const defaultGroup = document.getElementById('importDefaultGroup').value.trim();
+    const fileInput = document.getElementById('importFile');
+
+    if (importText) {
+        formData.append('import_text', importText);
+    }
+    if (defaultGroup) {
+        formData.append('default_group', defaultGroup);
+    }
+    if (fileInput.files.length > 0) {
+        formData.append('import_file', fileInput.files[0]);
+    }
+
+    if (![...formData.keys()].length || (![...formData.keys()].includes('import_text') && ![...formData.keys()].includes('import_file'))) {
+        alert('Вставьте список IP-адресов или выберите файл для импорта');
+        return;
+    }
+
+    const feedback = document.getElementById('import-feedback');
+
+    try {
+        const response = await fetchWithCsrf('/api/providers/import', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(readApiError(data));
+        }
+
+        const messages = [
+            `Создано: ${data.created}`,
+            `Пропущено: ${data.skipped}`,
+            `Прочитано строк: ${data.total_received}`
+        ];
+        const errorHtml = (data.errors || []).length
+            ? `<hr><div class="small">${data.errors.map((item) => `<div>${escapeHtml(item)}</div>`).join('')}</div>`
+            : '';
+
+        feedback.className = `alert alert-${data.created > 0 ? 'success' : 'warning'}`;
+        feedback.innerHTML = `${messages.join(' | ')}${errorHtml}`;
+
+        await loadGroups(defaultGroup || null);
+        await loadProviders();
+    } catch (error) {
+        feedback.className = 'alert alert-danger';
+        feedback.textContent = error.message || 'Ошибка импорта';
+    }
+}
+
+function showDeleteModal(id, name) {
+    deleteProviderId = id;
+    document.getElementById('deleteProviderName').textContent = name;
+    deleteModal.show();
+}
+
+async function confirmDelete() {
+    if (!deleteProviderId) {
+        return;
+    }
+
+    try {
+        const response = await fetchWithCsrf(`/api/providers/${deleteProviderId}`, { method: 'DELETE' });
+        if (!response.ok) {
+            throw new Error('Не удалось удалить узел');
+        }
+
+        deleteModal.hide();
+        deleteProviderId = null;
+        await loadGroups();
+        await loadProviders();
+    } catch (error) {
+        alert(`Ошибка удаления узла: ${error.message}`);
+    }
+}
+
+function trimText(value, limit) {
+    if (value.length <= limit) {
+        return value;
+    }
+    return `${value.slice(0, limit - 3)}...`;
+}
+
+function readApiError(payload) {
+    if (!payload) {
+        return 'Неизвестная ошибка';
+    }
+    if (typeof payload.detail === 'string') {
+        return payload.detail;
+    }
+    if (payload.detail && typeof payload.detail.message === 'string') {
+        const extra = Array.isArray(payload.detail.errors) && payload.detail.errors.length
+            ? `: ${payload.detail.errors.join('; ')}`
+            : '';
+        return `${payload.detail.message}${extra}`;
+    }
+    return payload.message || 'Неизвестная ошибка';
+}
+
+function encodeDataValue(text) {
+    return encodeURIComponent(text || '');
+}
+
+function decodeDataValue(text) {
+    return decodeURIComponent(text || '');
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

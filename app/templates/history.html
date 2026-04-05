@@ -1,0 +1,615 @@
+{% extends "base.html" %}
+
+{% block title %}История - Мониторинг сети{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="bi bi-clock-history"></i> История</h2>
+        <p class="text-muted mb-0">Журнал проверок и уведомлений с поиском по имени, IP-адресу и фильтром по группам.</p>
+    </div>
+</div>
+
+{% if not user %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-3 mb-0">
+            <div>
+                <strong>Гостевой режим.</strong> История доступна для просмотра без входа. Чтобы управлять узлами и настройками, войди под администратором.
+            </div>
+            <a href="/login" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-box-arrow-in-right"></i> Войти
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <label for="history-search" class="form-label mb-1">Поиск</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="history-search" placeholder="Имя или IP-адрес">
+                </div>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <label for="history-group-filter" class="form-label mb-1">Группа</label>
+                <select class="form-select" id="history-group-filter">
+                    <option value="">Все группы</option>
+                </select>
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <label for="provider-filter" class="form-label mb-1">Узел</label>
+                <select class="form-select" id="provider-filter">
+                    <option value="">Все узлы</option>
+                </select>
+            </div>
+            <div class="col-md-4 col-lg-2 d-flex align-items-end gap-2">
+                <button class="btn btn-primary flex-fill" type="button" id="apply-history-filters">
+                    <i class="bi bi-funnel"></i> Применить
+                </button>
+                <button class="btn btn-outline-secondary" type="button" id="reset-history-filters" title="Сбросить фильтры">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mt-3">
+            <div id="active-history-filter" class="text-muted small">Фильтры не заданы</div>
+            <div class="d-flex flex-wrap gap-2">
+                {% if user %}
+                <button id="clear-history-button" type="button" class="btn btn-outline-danger">
+                    <i class="bi bi-trash3"></i> Очистить историю
+                </button>
+                {% endif %}
+                <a id="history-export-link" href="/api/export/csv" class="btn btn-outline-primary">
+                    <i class="bi bi-download"></i> Экспорт CSV
+                </a>
+            </div>
+        </div>
+        <div id="history-action-feedback" class="mt-3 d-none"></div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="historyTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" type="button" role="tab">
+            <i class="bi bi-list-ul"></i> Проверки
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="alerts-tab" data-bs-toggle="tab" data-bs-target="#alerts" type="button" role="tab">
+            <i class="bi bi-bell"></i> Оповещения
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="historyTabsContent">
+    <div class="tab-pane fade show active" id="logs" role="tabpanel">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Время</th>
+                                <th>Узел</th>
+                                <th>IP-адрес</th>
+                                <th>Группа</th>
+                                <th>Статус</th>
+                                <th>Отклик</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-table-body">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <i class="bi bi-arrow-repeat spin"></i> Загрузка...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <span class="text-muted" id="logs-showing">Показано: 0 из 0</span>
+                    <nav>
+                        <ul class="pagination mb-0" id="logs-pagination"></ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="alerts" role="tabpanel">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Время</th>
+                                <th>Узел</th>
+                                <th>IP-адрес</th>
+                                <th>Группа</th>
+                                <th>Изменение</th>
+                                <th>Сообщение</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alerts-table-body">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <i class="bi bi-arrow-repeat spin"></i> Загрузка...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    .history-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .history-link:hover strong {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let logsPage = 1;
+const logsPerPage = 50;
+let historyTabs;
+const canClearHistory = {{ "true" if user else "false" }};
+const initialHistoryFilters = {
+    providerId: '',
+    group: '',
+    tab: 'logs'
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+    historyTabs = {
+        logs: new bootstrap.Tab(document.getElementById('logs-tab')),
+        alerts: new bootstrap.Tab(document.getElementById('alerts-tab'))
+    };
+
+    hydrateFiltersFromUrl();
+
+    await Promise.all([
+        loadProviders(),
+        loadGroups()
+    ]);
+
+    bindHistoryEvents();
+    await refreshHistoryData();
+    restoreActiveTab();
+});
+
+function bindHistoryEvents() {
+    document.getElementById('apply-history-filters').addEventListener('click', () => {
+        logsPage = 1;
+        refreshHistoryData();
+    });
+
+    document.getElementById('reset-history-filters').addEventListener('click', resetHistoryFilters);
+
+    document.getElementById('history-search').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            logsPage = 1;
+            refreshHistoryData();
+        }
+    });
+
+    document.getElementById('logs-tab').addEventListener('shown.bs.tab', () => syncUrlState());
+    document.getElementById('alerts-tab').addEventListener('shown.bs.tab', () => syncUrlState());
+
+    if (canClearHistory) {
+        document.getElementById('clear-history-button').addEventListener('click', clearHistory);
+    }
+}
+
+function hydrateFiltersFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const providerId = params.get('provider_id');
+    const search = params.get('search');
+    const group = params.get('group');
+    const page = parseInt(params.get('page') || '1', 10);
+
+    if (providerId) {
+        initialHistoryFilters.providerId = providerId;
+    }
+    if (search) {
+        document.getElementById('history-search').value = search;
+    }
+    if (group) {
+        initialHistoryFilters.group = group;
+    }
+    if (!Number.isNaN(page) && page > 0) {
+        logsPage = page;
+    }
+    if (params.get('tab') === 'alerts') {
+        initialHistoryFilters.tab = 'alerts';
+    }
+}
+
+function restoreActiveTab() {
+    if (initialHistoryFilters.tab === 'alerts') {
+        historyTabs.alerts.show();
+    }
+}
+
+async function loadProviders() {
+    const selectedProviderId = document.getElementById('provider-filter').value || initialHistoryFilters.providerId;
+    try {
+        const response = await fetch('/api/providers?limit=1000&sort_by=name');
+        if (!response.ok) {
+            throw new Error('Не удалось получить список узлов');
+        }
+
+        const providers = await response.json();
+        const select = document.getElementById('provider-filter');
+        select.innerHTML = '<option value="">Все узлы</option>';
+
+        providers.forEach((provider) => {
+            const option = document.createElement('option');
+            option.value = provider.id;
+            option.textContent = `${provider.name} (${provider.ip_address})`;
+            select.appendChild(option);
+        });
+
+        if (selectedProviderId) {
+            select.value = selectedProviderId;
+        }
+        initialHistoryFilters.providerId = '';
+    } catch (error) {
+        console.error('Ошибка загрузки узлов:', error);
+    }
+}
+
+async function loadGroups() {
+    const selectedGroup = document.getElementById('history-group-filter').value || initialHistoryFilters.group;
+    try {
+        const response = await fetch('/api/providers/groups/all');
+        if (!response.ok) {
+            throw new Error('Не удалось загрузить группы');
+        }
+
+        const data = await response.json();
+        const select = document.getElementById('history-group-filter');
+        select.innerHTML = '<option value="">Все группы</option>';
+
+        data.groups.forEach((group) => {
+            const option = document.createElement('option');
+            option.value = group;
+            option.textContent = group;
+            select.appendChild(option);
+        });
+
+        if (selectedGroup) {
+            select.value = selectedGroup;
+        }
+        initialHistoryFilters.group = '';
+    } catch (error) {
+        console.error('Ошибка загрузки групп:', error);
+    }
+}
+
+async function refreshHistoryData() {
+    syncUrlState();
+    updateActiveFilterLabel();
+    updateHistoryExportLink();
+    await Promise.all([
+        loadLogs(),
+        loadAlerts()
+    ]);
+}
+
+async function loadLogs() {
+    try {
+        const response = await fetch(buildLogsUrl(logsPage));
+        if (!response.ok) {
+            throw new Error('Не удалось получить журнал проверок');
+        }
+
+        const data = await response.json();
+        renderLogs(data.logs);
+        renderLogsPagination(data.total, data.page, data.per_page);
+    } catch (error) {
+        console.error('Ошибка загрузки журнала:', error);
+        document.getElementById('logs-table-body').innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle"></i> Ошибка загрузки журнала
+                </td>
+            </tr>
+        `;
+    }
+}
+
+async function loadAlerts() {
+    try {
+        const response = await fetch(buildAlertsUrl());
+        if (!response.ok) {
+            throw new Error('Не удалось получить журнал оповещений');
+        }
+
+        const data = await response.json();
+        renderAlerts(data.alerts);
+    } catch (error) {
+        console.error('Ошибка загрузки оповещений:', error);
+        document.getElementById('alerts-table-body').innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle"></i> Ошибка загрузки оповещений
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function buildBaseHistoryParams() {
+    const params = new URLSearchParams();
+    const providerId = document.getElementById('provider-filter').value;
+    const search = document.getElementById('history-search').value.trim();
+    const group = document.getElementById('history-group-filter').value;
+
+    if (providerId) {
+        params.set('provider_id', providerId);
+    }
+    if (search) {
+        params.set('search', search);
+    }
+    if (group) {
+        params.set('group', group);
+    }
+
+    return params;
+}
+
+function buildLogsUrl(page) {
+    const params = buildBaseHistoryParams();
+    params.set('page', page);
+    params.set('per_page', logsPerPage);
+    return `/api/status/history?${params.toString()}`;
+}
+
+function buildAlertsUrl() {
+    const params = buildBaseHistoryParams();
+    params.set('limit', '200');
+    return `/api/status/alerts?${params.toString()}`;
+}
+
+function updateHistoryExportLink() {
+    const params = buildBaseHistoryParams();
+    document.getElementById('history-export-link').href = `/api/export/csv?${params.toString()}`;
+}
+
+function setHistoryActionFeedback(message, variant = 'info') {
+    const feedback = document.getElementById('history-action-feedback');
+    feedback.className = `alert alert-${variant} mt-3`;
+    feedback.textContent = message;
+}
+
+async function clearHistory() {
+    const params = buildBaseHistoryParams();
+    const filterText = document.getElementById('active-history-filter').textContent.trim();
+    const confirmationText = filterText && filterText !== 'Фильтры не заданы'
+        ? `Очистить историю и оповещения по текущим фильтрам?\n\n${filterText}`
+        : 'Очистить всю историю проверок и оповещений?';
+
+    if (!window.confirm(confirmationText)) {
+        return;
+    }
+
+    setHistoryActionFeedback('Удаление истории...', 'warning');
+
+    try {
+        const response = await fetchWithCsrf(`/api/status/history?${params.toString()}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || 'Не удалось очистить историю');
+        }
+
+        setHistoryActionFeedback(
+            `Удалено записей: проверки ${data.deleted_logs ?? 0}, оповещения ${data.deleted_alerts ?? 0}.`,
+            'success'
+        );
+        logsPage = 1;
+        await refreshHistoryData();
+    } catch (error) {
+        console.error('Ошибка очистки истории:', error);
+        setHistoryActionFeedback(error.message || 'Не удалось очистить историю', 'danger');
+    }
+}
+
+function updateActiveFilterLabel() {
+    const providerText = document.getElementById('provider-filter').selectedOptions[0]?.textContent || '';
+    const search = document.getElementById('history-search').value.trim();
+    const group = document.getElementById('history-group-filter').value;
+    const parts = [];
+
+    if (providerText && document.getElementById('provider-filter').value) {
+        parts.push(`Узел: ${providerText}`);
+    }
+    if (search) {
+        parts.push(`Поиск: ${search}`);
+    }
+    if (group) {
+        parts.push(`Группа: ${group}`);
+    }
+
+    document.getElementById('active-history-filter').textContent = parts.length
+        ? parts.join(' | ')
+        : 'Фильтры не заданы';
+}
+
+function renderLogs(logs) {
+    const tbody = document.getElementById('logs-table-body');
+    if (!logs.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted py-4">Записи не найдены</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = logs.map((log) => `
+        <tr class="${log.status === 'offline' ? 'table-danger' : ''}">
+            <td>${formatRuDate(log.timestamp)}</td>
+            <td>
+                <a class="history-link" href="/history?provider_id=${log.provider_id}">
+                    <strong>${escapeHtml(log.provider_name)}</strong>
+                </a>
+            </td>
+            <td><code>${escapeHtml(log.provider_ip_address)}</code></td>
+            <td>${log.group_name ? `<span class="badge bg-secondary">${escapeHtml(log.group_name)}</span>` : '-'}</td>
+            <td>
+                <span class="status-indicator ${log.status}"></span>
+                <span class="status-${log.status}">${log.status === 'offline' ? 'Недоступен' : 'В сети'}</span>
+            </td>
+            <td>${log.response_time ? `${log.response_time} ms` : '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function renderLogsPagination(total, page, perPage) {
+    const totalPages = Math.ceil(total / perPage);
+    const showingText = total > 0
+        ? `Показано ${((page - 1) * perPage) + 1}-${Math.min(page * perPage, total)} из ${total}`
+        : 'Показано: 0 из 0';
+    document.getElementById('logs-showing').textContent = showingText;
+
+    if (totalPages <= 1) {
+        document.getElementById('logs-pagination').innerHTML = '';
+        return;
+    }
+
+    let paginationHtml = `
+        <li class="page-item ${page <= 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="${page > 1 ? `goToPage(${page - 1})` : 'return false'}">Назад</a>
+        </li>
+    `;
+
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(totalPages, page + 2);
+
+    if (startPage > 1) {
+        paginationHtml += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(1)">1</a></li>`;
+        if (startPage > 2) {
+            paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+
+    for (let pageNumber = startPage; pageNumber <= endPage; pageNumber += 1) {
+        paginationHtml += `
+            <li class="page-item ${pageNumber === page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToPage(${pageNumber})">${pageNumber}</a>
+            </li>
+        `;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        paginationHtml += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${totalPages})">${totalPages}</a></li>`;
+    }
+
+    paginationHtml += `
+        <li class="page-item ${page >= totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="${page < totalPages ? `goToPage(${page + 1})` : 'return false'}">Далее</a>
+        </li>
+    `;
+
+    document.getElementById('logs-pagination').innerHTML = paginationHtml;
+}
+
+function goToPage(page) {
+    logsPage = page;
+    syncUrlState();
+    loadLogs();
+    return false;
+}
+
+function renderAlerts(alerts) {
+    const tbody = document.getElementById('alerts-table-body');
+    if (!alerts.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted py-4">Оповещения не найдены</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = alerts.map((alert) => `
+        <tr class="${alert.status_change === 'down' ? 'table-danger' : 'table-success'}">
+            <td>${formatRuDate(alert.sent_at)}</td>
+            <td>
+                <a class="history-link" href="/history?provider_id=${alert.provider_id}">
+                    <strong>${escapeHtml(alert.provider_name)}</strong>
+                </a>
+            </td>
+            <td><code>${escapeHtml(alert.provider_ip_address)}</code></td>
+            <td>${alert.group_name ? `<span class="badge bg-secondary">${escapeHtml(alert.group_name)}</span>` : '-'}</td>
+            <td>
+                <span class="badge bg-${alert.status_change === 'down' ? 'danger' : 'success'}">
+                    ${alert.status_change === 'down' ? 'Падение' : 'Восстановление'}
+                </span>
+            </td>
+            <td>${alert.message ? escapeHtml(alert.message) : '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function resetHistoryFilters() {
+    document.getElementById('history-search').value = '';
+    document.getElementById('history-group-filter').value = '';
+    document.getElementById('provider-filter').value = '';
+    logsPage = 1;
+    refreshHistoryData();
+}
+
+function syncUrlState() {
+    const params = buildBaseHistoryParams();
+    if (logsPage > 1) {
+        params.set('page', logsPage);
+    }
+    if (document.getElementById('alerts-tab').classList.contains('active')) {
+        params.set('tab', 'alerts');
+    }
+
+    const search = params.toString();
+    const newUrl = search ? `/history?${search}` : '/history';
+    window.history.replaceState({}, '', newUrl);
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

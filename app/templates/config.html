@@ -1,0 +1,487 @@
+{% extends "base.html" %}
+
+{% block title %}Конфигурация - Мониторинг сети{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="bi bi-gear"></i> Конфигурация</h2>
+        <p class="text-muted">Пользователи, Telegram-бот и резервные копии SQLite</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-people"></i> Пользователи</h5>
+                <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#userModal" onclick="resetUserForm()">
+                    <i class="bi bi-plus-lg"></i> Добавить пользователя
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Логин</th>
+                                <th>Статус</th>
+                                <th>Создан</th>
+                                <th>Последний вход</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <i class="bi bi-arrow-repeat spin"></i> Загрузка...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-5">
+        <div class="d-flex flex-column gap-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-telegram"></i> Telegram</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Команды бота после сохранения токена: <code>/status</code>, <code>/down</code>, <code>/summary</code>.
+                        Бот отвечает через polling внутри приложения, отдельный webhook не нужен.
+                    </div>
+
+                    <form id="telegramForm">
+                        <div class="mb-3">
+                            <label for="telegramToken" class="form-label">Токен бота</label>
+                            <input type="text" class="form-control" id="telegramToken" placeholder="123456:ABC...">
+                        </div>
+                        <div class="mb-3">
+                            <label for="telegramChatId" class="form-label">Chat ID</label>
+                            <input type="text" class="form-control" id="telegramChatId" placeholder="Например: 123456789 или -1001234567890">
+                            <div class="form-text">Если указан, команды будут обрабатываться только из этого чата.</div>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-primary" onclick="saveTelegramConfig()">
+                                <i class="bi bi-save"></i> Сохранить
+                            </button>
+                            <button type="button" class="btn btn-outline-success" onclick="testTelegramConfig()">
+                                <i class="bi bi-send-check"></i> Проверить отправку
+                            </button>
+                        </div>
+                    </form>
+
+                    <div id="telegram-status" class="mt-3"></div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-safe2"></i> Резервные копии SQLite</h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="createBackupFromUi()">
+                        <i class="bi bi-plus-circle"></i> Создать backup
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="small text-muted mb-3">
+                        <div id="database-path-label">База: —</div>
+                        <div id="backup-dir-label">Папка backup: —</div>
+                    </div>
+                    <div id="backup-status" class="mb-3"></div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Файл</th>
+                                    <th>Размер</th>
+                                    <th>Создан</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="backups-table-body">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-3">
+                                        <i class="bi bi-arrow-repeat spin"></i> Загрузка...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">Добавить пользователя</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <input type="hidden" id="userId">
+                    <div class="mb-3">
+                        <label for="userUsername" class="form-label">Логин</label>
+                        <input type="text" class="form-control" id="userUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="userPassword" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="userPassword" placeholder="Заполните для установки или смены пароля">
+                        <div class="form-text">При редактировании поле можно оставить пустым, чтобы не менять пароль.</div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="userIsActive" checked>
+                        <label class="form-check-label" for="userIsActive">Пользователь активен</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveUser()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Удалить пользователя</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Удалить пользователя <strong id="deleteUserName"></strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDeleteUser()">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let userModal;
+let deleteUserModal;
+let deleteUserId = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    userModal = new bootstrap.Modal(document.getElementById('userModal'));
+    deleteUserModal = new bootstrap.Modal(document.getElementById('deleteUserModal'));
+    document.getElementById('users-table-body').addEventListener('click', handleUsersTableClick);
+
+    loadUsers();
+    loadTelegramConfig();
+    loadBackups();
+});
+
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/config/users');
+        if (!response.ok) throw new Error('Не удалось получить список пользователей');
+        const data = await response.json();
+        renderUsers(data.users);
+    } catch (error) {
+        document.getElementById('users-table-body').innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle"></i> ${escapeHtml(error.message)}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function renderUsers(users) {
+    const tbody = document.getElementById('users-table-body');
+    if (!users.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-muted py-4">Пользователи ещё не созданы</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = users.map((user) => `
+        <tr>
+            <td><strong>${escapeHtml(user.username)}</strong></td>
+            <td>
+                <span class="badge bg-${user.is_active ? 'success' : 'secondary'}">
+                    ${user.is_active ? 'Активен' : 'Отключен'}
+                </span>
+            </td>
+            <td>${user.created_at ? formatRuDate(user.created_at) : '-'}</td>
+            <td>${user.last_login ? formatRuDate(user.last_login) : '-'}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary js-edit-user"
+                    data-id="${user.id}"
+                    data-username="${escapeHtml(user.username)}"
+                    data-active="${user.is_active ? '1' : '0'}">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger js-delete-user"
+                    data-id="${user.id}"
+                    data-username="${escapeHtml(user.username)}">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function handleUsersTableClick(event) {
+    const editButton = event.target.closest('.js-edit-user');
+    if (editButton) {
+        document.getElementById('userId').value = editButton.dataset.id;
+        document.getElementById('userUsername').value = decodeHtml(editButton.dataset.username);
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userIsActive').checked = editButton.dataset.active === '1';
+        document.getElementById('userModalTitle').textContent = 'Редактировать пользователя';
+        userModal.show();
+        return;
+    }
+
+    const deleteButton = event.target.closest('.js-delete-user');
+    if (deleteButton) {
+        deleteUserId = deleteButton.dataset.id;
+        document.getElementById('deleteUserName').textContent = decodeHtml(deleteButton.dataset.username);
+        deleteUserModal.show();
+    }
+}
+
+function resetUserForm() {
+    document.getElementById('userForm').reset();
+    document.getElementById('userId').value = '';
+    document.getElementById('userIsActive').checked = true;
+    document.getElementById('userModalTitle').textContent = 'Добавить пользователя';
+}
+
+async function saveUser() {
+    const userId = document.getElementById('userId').value;
+    const payload = {
+        username: document.getElementById('userUsername').value.trim(),
+        is_active: document.getElementById('userIsActive').checked
+    };
+    const password = document.getElementById('userPassword').value;
+
+    if (!payload.username) {
+        alert('Введите логин пользователя');
+        return;
+    }
+
+    if (!userId && password.length < 4) {
+        alert('Пароль должен быть не короче 4 символов');
+        return;
+    }
+
+    if (password) payload.password = password;
+
+    try {
+        const response = await fetchWithCsrf(userId ? `/api/config/users/${userId}` : '/api/config/users', {
+            method: userId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Не удалось сохранить пользователя');
+        }
+        userModal.hide();
+        loadUsers();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function confirmDeleteUser() {
+    if (!deleteUserId) return;
+    try {
+        const response = await fetchWithCsrf(`/api/config/users/${deleteUserId}`, { method: 'DELETE' });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Не удалось удалить пользователя');
+        }
+        deleteUserModal.hide();
+        loadUsers();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function loadTelegramConfig() {
+    try {
+        const response = await fetch('/api/config/telegram');
+        if (!response.ok) throw new Error('Не удалось загрузить настройки Telegram');
+        const data = await response.json();
+        document.getElementById('telegramToken').value = data.bot_token || '';
+        document.getElementById('telegramChatId').value = data.chat_id || '';
+        setTelegramStatus('Настройки Telegram загружены', true);
+    } catch (error) {
+        setTelegramStatus(error.message, false);
+    }
+}
+
+async function saveTelegramConfig() {
+    const payload = {
+        bot_token: document.getElementById('telegramToken').value.trim(),
+        chat_id: document.getElementById('telegramChatId').value.trim()
+    };
+
+    try {
+        const response = await fetchWithCsrf('/api/config/telegram', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Не удалось сохранить настройки Telegram');
+        }
+        setTelegramStatus('Настройки Telegram сохранены', true);
+    } catch (error) {
+        setTelegramStatus(error.message, false);
+    }
+}
+
+async function testTelegramConfig() {
+    const payload = {
+        bot_token: document.getElementById('telegramToken').value.trim(),
+        chat_id: document.getElementById('telegramChatId').value.trim()
+    };
+
+    try {
+        const response = await fetchWithCsrf('/api/config/telegram/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('Не удалось выполнить тест Telegram');
+        const data = await response.json();
+        setTelegramStatus(data.message, data.success);
+    } catch (error) {
+        setTelegramStatus(error.message, false);
+    }
+}
+
+function setTelegramStatus(message, success) {
+    document.getElementById('telegram-status').innerHTML = `
+        <div class="alert alert-${success ? 'success' : 'danger'} mb-0">${escapeHtml(message)}</div>
+    `;
+}
+
+async function loadBackups() {
+    try {
+        const response = await fetch('/api/config/backups');
+        if (!response.ok) throw new Error('Не удалось загрузить список backup-файлов');
+        const data = await response.json();
+
+        document.getElementById('database-path-label').textContent = `База: ${data.database_path}`;
+        document.getElementById('backup-dir-label').textContent = `Папка backup: ${data.backup_directory}`;
+        renderBackups(data.backups || []);
+    } catch (error) {
+        document.getElementById('backups-table-body').innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center text-danger py-3">
+                    <i class="bi bi-exclamation-triangle"></i> ${escapeHtml(error.message)}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function renderBackups(backups) {
+    const tbody = document.getElementById('backups-table-body');
+    if (!backups.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center text-muted py-3">Backup-файлы пока не созданы</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = backups.map((backup) => `
+        <tr>
+            <td><code>${escapeHtml(backup.filename)}</code></td>
+            <td>${formatBytes(backup.size_bytes)}</td>
+            <td>${backup.created_at ? formatRuDate(backup.created_at) : '-'}</td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" href="/api/config/backups/download/${encodeURIComponent(backup.filename)}">
+                    <i class="bi bi-download"></i>
+                </a>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function createBackupFromUi() {
+    setBackupStatus('Создаю резервную копию...', true);
+    try {
+        const response = await fetchWithCsrf('/api/config/backups', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.detail || 'Не удалось создать backup');
+        }
+
+        setBackupStatus(`Backup создан: ${data.filename}`, true);
+        await loadBackups();
+    } catch (error) {
+        setBackupStatus(error.message, false);
+    }
+}
+
+function setBackupStatus(message, success) {
+    document.getElementById('backup-status').innerHTML = `
+        <div class="alert alert-${success ? 'success' : 'danger'} mb-0 py-2">${escapeHtml(message)}</div>
+    `;
+}
+
+function formatBytes(bytes) {
+    const value = Number(bytes || 0);
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function decodeHtml(text) {
+    if (!text) return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+}
+</script>
+{% endblock %}
